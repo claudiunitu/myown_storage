@@ -1,0 +1,61 @@
+In Linux, cron jobs use a specific syntax to schedule tasks at particular times. The syntax for a cron job is as follows:
+
+
+* * * * * /path/to/script.sh
+Each * represents a time unit in this order:
+
+Minute (0 - 59)
+Hour (0 - 23)
+Day of Month (1 - 31)
+Month (1 - 12)
+Day of Week (0 - 7, where 0 and 7 both represent Sunday)
+Example Schedules
+Here's how different schedules would look:
+
+Every Minute: To run a script every minute, you would use:
+
+
+* * * * * /path/to/script.sh
+Every Hour: To run a script every hour at the start of the hour:
+
+
+0 * * * * /path/to/script.sh
+Every Day at 2 AM: To run a script daily at 2 AM:
+
+
+0 2 * * * /path/to/script.sh
+Every Monday at 3 PM: To run a script weekly on Monday at 3 PM:
+
+
+0 15 * * 1 /path/to/script.sh
+Every 5 Minutes: To run a script every 5 minutes:
+
+
+*/5 * * * * /path/to/script.sh
+The /5 in the minutes field indicates every 5 minutes.
+
+Detailed Breakdown
+In each cron expression:
+
+Minute: A number from 0 to 59 or * for every minute.
+Hour: A number from 0 to 23 or * for every hour.
+Day of Month: A number from 1 to 31 or * for every day.
+Month: A number from 1 to 12 or * for every month.
+Day of Week: A number from 0 to 7 (where both 0 and 7 mean Sunday) or * for every day of the week.
+Special Scheduling Keywords
+Cron also supports keywords to simplify scheduling:
+
+@reboot: Run once at startup.
+@yearly or @annually: Run once a year (0 0 1 1 *).
+@monthly: Run once a month (0 0 1 * *).
+@weekly: Run once a week (0 0 * * 0).
+@daily or @midnight: Run once a day (0 0 * * *).
+@hourly: Run once an hour (0 * * * *).
+Example: Running Every Minute
+To set up your backup script to run every minute, you would add the following line to your crontab:
+
+
+* * * * * /usr/local/bin/backup_to_driveB.sh
+This will trigger the script /usr/local/bin/backup_to_driveB.sh every minute.
+
+Note: Be careful with high-frequency cron jobs like this, as they may consume system resources rapidly, especially if the script takes more than a minute to complete.
