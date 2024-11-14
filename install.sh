@@ -6,8 +6,14 @@ UUID_B="77DF-A15C"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 MOUNT_POINT_B="/mnt/myown_storage_B"  # Mount point for USB Drive B (e.g., /mnt/usbB)
 LOG_FILE="/var/log/myown_storage_backup.log"  # Log file for cron job logs
-LOCK_FILE="/var/run/myown_storage_backup.lock"  # Lock file to prevent concurrent backups
 BACKUP_SCRIPT="/usr/local/bin/myown_storage_backup.sh"  # Path to the backup script
+
+#Minute (0 - 59)
+#Hour (0 - 23)
+#Day of Month (1 - 31) */2 every 2 days
+#Month (1 - 12)
+#Day of Week (0 - 7, where 0 and 7 both represent Sunday)
+CRONJOB="0 0 */2 * * $BACKUP_SCRIPT"
 
 # Check if UUIDs and Mount Points are specified
 if [[ -z "$UUID_A" || -z "$UUID_B" || -z "$MOUNT_POINT_A" || -z "$MOUNT_POINT_B" ]]; then
@@ -133,12 +139,6 @@ else
 fi
 
 # Install cron job for regular backups
-#Minute (0 - 59)
-#Hour (0 - 23)
-#Day of Month (1 - 31) */2 every 2 days
-#Month (1 - 12)
-#Day of Week (0 - 7, where 0 and 7 both represent Sunday)
-#CRONJOB="0 0 */2 * * $BACKUP_SCRIPT"
 (crontab -l 2>/dev/null; echo "$CRONJOB") | crontab -
 
 echo "Cron job installed to back up Drive A to Drive B every hour."
@@ -151,28 +151,8 @@ sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
 # Configuration Section
 MOUNT_POINT_A="$MOUNT_POINT_A"  # Mount point for USB Drive A
 MOUNT_POINT_B="$MOUNT_POINT_B"  # Mount point for USB Drive B
-LOCK_FILE="$LOCK_FILE"  # Lock file to prevent concurrent backups
 LOG_FILE="$LOG_FILE"  # Log file for backup logs
 
-# Try to figure out if a lock file exists due to an unsuccessful backup
-# or if another backup process is still in progress
-# Check if the lock file exists
-if [ -f "\$LOCK_FILE" ]; then
-    # Read the PID from the lock file
-    LOCK_PID=\$(cat "\$LOCK_FILE")
-
-    # Check if the process with the PID is still running
-    if kill -0 "\$LOCK_PID" 2>/dev/null; then
-        echo "Backup already in progress (PID \$LOCK_PID). Exiting." >> "\$LOG_FILE"
-        exit 0
-    else
-        echo "Previous backup process with PID \$LOCK_PID is not running. Removing stale lock file." >> "\$LOG_FILE"
-        rm -f "\$LOCK_FILE"  # Remove the stale lock file
-    fi
-fi
-
-# Write the current PID to the lock file
-echo $$ > "\$LOCK_FILE"
 
 
 # Run rsync backup
@@ -190,7 +170,9 @@ if [[ ! -d "\$MOUNT_POINT_B/backup" ]]; then
   sudo mkdir -p "\$MOUNT_POINT_B/backup"
   sudo chmod 777 "\$MOUNT_POINT_B/backup"
 fi
-rsync -av --delete --temp-dir="\$MOUNT_POINT_B/temp" "\$MOUNT_POINT_A/" "\$MOUNT_POINT_B/backup" >> "\$LOG_FILE" 2>&1
+# use flock in combination with rsync to prevent other processes to 
+# interfere with the source while sync is in progress
+flock -x /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B/temp" "\$MOUNT_POINT_A/" "\$MOUNT_POINT_B/backup" >> "\$LOG_FILE" 2>&1
 
 # Check if rsync was successful and log any errors
 if [ \$? -eq 0 ]; then
@@ -199,8 +181,6 @@ else
   echo "Backup failed at \$(date)" >> "\$LOG_FILE"
 fi
 
-# Remove the lock file after the backup is done
-rm -f "\$LOCK_FILE"
 EOL
 
 # Make the backup script executable
