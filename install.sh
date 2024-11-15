@@ -188,11 +188,15 @@ if ! mountpoint -q "$MOUNT_POINT_B"; then
     exit 1
 fi
 
-AVAILABLE_SPACE=\$(df "$MOUNT_POINT_B" | awk 'NR==2 {print \$4}' | tr -d ',')
+AVAILABLE_SPACE=\$(df -B 1 "$MOUNT_POINT_B" | awk 'NR==2 {print \$4}' | tr -d ',')
 
 # Calculate the space needed by files in $MOUNT_POINT_A not already in $MOUNT_POINT_B
-REQUIRED_SPACE=\$(rsync -an --stats "$MOUNT_POINT_A/myown_storage_vault" "$MOUNT_POINT_B/myown_storage_vault_backup" | awk '/Total file size:/ {print \$4}')
+REQUIRED_SPACE=\$(sudo rsync -an --stats "$MOUNT_POINT_A/myown_storage_vault" "$MOUNT_POINT_B/myown_storage_vault_backup" | awk '/Total file size:/ {print \$4}' | tr -d ',')
 # The above command uses rsync in dry-run mode (-n) and extracts the total file size of the files to be copied.
+
+# Debugging - print available space and required space
+echo "Available space on \$MOUNT_POINT_B: \$AVAILABLE_SPACE bytes"
+echo "Required space for files: \$REQUIRED_SPACE bytes"
 
 if [ "\$AVAILABLE_SPACE" -lt "\$REQUIRED_SPACE" ]; then
     echo "Error: Insufficient space on \$MOUNT_POINT_B. Aborting!" >> "\$LOG_FILE"
@@ -214,7 +218,7 @@ fi
 # use flock in combination with rsync to prevent other processes to 
 # interfere with the source while sync is in progress
 # also wait only 600s (10 min) then exit
-flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B/myown_storage_vault_backup_temp" "\$MOUNT_POINT_A/myown_storage_vault" "\$MOUNT_POINT_B/myown_storage_vault_backup" >> "\$LOG_FILE" 2>&1
+sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B/myown_storage_vault_backup_temp" "\$MOUNT_POINT_A/myown_storage_vault" "\$MOUNT_POINT_B/myown_storage_vault_backup" >> "\$LOG_FILE" 2>&1
 
 if [ \$? -ne 0 ]; then
   echo "Failed to acquire lock or run rsync." >> "\$LOG_FILE"
