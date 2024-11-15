@@ -25,16 +25,6 @@ echo "Removing entries for Drive A and Drive B from /etc/fstab"
 sudo sed -i "\|UUID=$UUID_A|d" /etc/fstab
 sudo sed -i "\|UUID=$UUID_B|d" /etc/fstab
 
-# Delete mount points
-if [ -d "$MOUNT_POINT_A" ]; then
-    echo "Deleting mount point for Drive A: $MOUNT_POINT_A"
-    sudo rm -rf "$MOUNT_POINT_A"
-fi
-
-if [ -d "$MOUNT_POINT_B" ]; then
-    echo "Deleting mount point for Drive B: $MOUNT_POINT_B"
-    sudo rm -rf "$MOUNT_POINT_B"
-fi
 
 # Remove cron job for the backup script
 echo "Removing cron job for the backup script"

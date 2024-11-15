@@ -188,7 +188,7 @@ if ! mountpoint -q "$MOUNT_POINT_B"; then
     exit 1
 fi
 
-AVAILABLE_SPACE=\$(df "$MOUNT_POINT_B" | awk 'NR==2 {print \$4}')
+AVAILABLE_SPACE=\$(df "$MOUNT_POINT_B" | awk 'NR==2 {print \$4}' | tr -d ',')
 
 # Calculate the space needed by files in $MOUNT_POINT_A not already in $MOUNT_POINT_B
 REQUIRED_SPACE=\$(rsync -an --stats "$MOUNT_POINT_A/myown_storage_vault" "$MOUNT_POINT_B/myown_storage_vault_backup" | awk '/Total file size:/ {print \$4}')
