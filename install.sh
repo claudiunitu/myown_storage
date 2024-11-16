@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ensure it's run as sudo
+# ensure it's running as sudo
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root or use sudo."
   exit 1
@@ -157,13 +157,19 @@ if [[ ! -d "$MOUNT_POINT_A/myown_storage_vault" ]]; then
   sudo chmod 777 "$MOUNT_POINT_A/myown_storage_vault"
 fi
 
-# Install cron job for regular backups
+# Create Vault Temp Dir if it Does Not Exist
+if [[ ! -d "$MOUNT_POINT_A/myown_storage_vault_temp" ]]; then
+  echo "Creating Vault Temp Dir"
+  sudo mkdir -p "$MOUNT_POINT_A/myown_storage_vault_temp"
+  sudo chmod 777 "$MOUNT_POINT_A/myown_storage_vault_temp"
+fi
+
+# Install cron job for regular Vault backups
 # Prevent duplicate cron entries by ensuring the script checks for an existing entry
 (crontab -l 2>/dev/null | grep -v "$BACKUP_SCRIPT"; echo "$CRONJOB") | crontab -
 
 echo "Cron job installed to back up Drive A to Drive B every hour."
 
-# Create the backup script at the specified path
 echo "Writing backup script to $BACKUP_SCRIPT"
 sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
 #!/bin/bash
@@ -172,7 +178,6 @@ sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
 MOUNT_POINT_A="$MOUNT_POINT_A"  # Mount point for USB Drive A
 MOUNT_POINT_B="$MOUNT_POINT_B"  # Mount point for USB Drive B
 LOG_FILE="$LOG_FILE"  # Log file for backup logs
-
 
 
 # Run rsync backup
@@ -207,15 +212,10 @@ fi
 sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B/myown_storage_vault_backup_temp" "\$MOUNT_POINT_A/myown_storage_vault" "\$MOUNT_POINT_B/myown_storage_vault_backup" >> "\$LOG_FILE" 2>&1
 
 if [ \$? -ne 0 ]; then
-  echo "Failed to acquire lock or run rsync." >> "\$LOG_FILE"
-fi
-
-# Check if rsync was successful and log any errors
-if [ \$? -eq 0 ]; then
-  echo "Backup completed successfully at \$(date)" >> "\$LOG_FILE"
+  echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "\$LOG_FILE"
 else
-  echo "Backup failed at \$(date)" >> "\$LOG_FILE"
-fi
+  echo "Vault Backup completed successfully at \$(date)" >> "\$LOG_FILE"
+
 
 EOL
 

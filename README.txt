@@ -30,3 +30,4 @@ It also sets up a cron job for periodic backups.
 - Edit install.sh script with your Drive A and Drive B partitions UUIDs
 - `sudo ./install.sh`
 - Drive B will be periodically backed up to drive B
+- Copy `current_dir_to_vault.sh` script to any folder you want to be copied to vault and execute it. The folder will be copied to vault.
