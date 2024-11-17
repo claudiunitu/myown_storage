@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Variables
-USER="$1"
+USER_ARG="$1"
 PASSWORD="$2"
 MOUNT_POINT_A="/mnt/myown_storage_A"
 MOUNT_POINT_A_VAULT_DIR="$MOUNT_POINT_A/myown_storage_vault"  
-USER_DIR="$MOUNT_POINT_A_VAULT_DIR/users/$USER"
+USER_DIR="$MOUNT_POINT_A_VAULT_DIR/users/$USER_ARG"
 
 # Ensure script runs as root
 if [[ $EUID -ne 0 ]]; then
@@ -14,13 +14,13 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Create User
-if id "$USER" &>/dev/null; then
-    echo "User $USER already exists."
+if id "$USER_ARG" &>/dev/null; then
+    echo "User $USER_ARG already exists."
     exit 1
 else
-    sudo adduser --disabled-password --gecos "" "$USER"
-    echo "$USER:$PASSWORD" | chpasswd
-    echo "User $USER created."
+    sudo adduser --disabled-password --gecos "" "$USER_ARG"
+    echo "$USER_ARG:$PASSWORD" | chpasswd
+    echo "User $USER_ARG created."
 fi
 
 # Create Directory for SFTP
