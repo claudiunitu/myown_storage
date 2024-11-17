@@ -1,3 +1,5 @@
+# DO NOT USE THIS YET
+
 # Configuration Section
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 LOG_FILE="/var/log/myown_storage_backup.log"  # Log file for cron job logs

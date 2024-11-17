@@ -11,6 +11,11 @@ UUID_A="273c3d88-09e8-477b-a2ba-c160340bbcdb"  # UUID of USB Drive A (Storage)
 UUID_B="f78d83e6-e275-4a15-bd36-ff69e2050de5"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 MOUNT_POINT_B="/mnt/myown_storage_B"  # Mount point for USB Drive B (e.g., /mnt/usbB)
+MOUNT_POINT_A_VAULT_DIR="$MOUNT_POINT_A/myown_storage_vault"  
+VAULT_USERS_DIR="$MOUNT_POINT_A_VAULT_DIR/users/"
+MOUNT_POINT_A_VAULT_TEMP_DIR="$MOUNT_POINT_A/myown_storage_vault_temp"  
+MOUNT_POINT_B_VAULT_BACKUP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup"  
+MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup_temp"  
 LOG_FILE="/var/log/myown_storage_backup.log"  # Log file for cron job logs
 BACKUP_SCRIPT="/usr/local/bin/myown_storage_backup.sh"  # Path to the backup script
 
@@ -124,7 +129,7 @@ if ! mountpoint -q "$MOUNT_POINT_A"; then
         echo "Error: Failed to mount $DEVICE_A to $MOUNT_POINT_A"
         exit 1
     fi
-    sudo chmod 777 "$MOUNT_POINT_A"
+    sudo chmod 755 "$MOUNT_POINT_A"
 else
     echo "$MOUNT_POINT_A is already mounted"
 fi
@@ -135,7 +140,7 @@ if ! mountpoint -q "$MOUNT_POINT_B"; then
         echo "Error: Failed to mount $DEVICE_B to $MOUNT_POINT_B"
         exit 1
     fi
-    sudo chmod 777 "$MOUNT_POINT_B"
+    sudo chmod 755 "$MOUNT_POINT_B"
 else
     echo "$MOUNT_POINT_B is already mounted"
 fi
@@ -151,18 +156,26 @@ fi
 
 # Create Vault Dir if it Does Not Exist
 # Only this Dir will be subject to backups
-if [[ ! -d "$MOUNT_POINT_A/myown_storage_vault" ]]; then
+if [[ ! -d "$MOUNT_POINT_A_VAULT_DIR" ]]; then
   echo "Creating Vault Dir on source drive"
-  sudo mkdir -p "$MOUNT_POINT_A/myown_storage_vault"
-  sudo chmod 777 "$MOUNT_POINT_A/myown_storage_vault"
+  sudo mkdir -p "$MOUNT_POINT_A_VAULT_DIR"
+  sudo chmod 755 "$MOUNT_POINT_A_VAULT_DIR"
 fi
 
 # Create Vault Temp Dir if it Does Not Exist
-if [[ ! -d "$MOUNT_POINT_A/myown_storage_vault_temp" ]]; then
+if [[ ! -d "$MOUNT_POINT_A_VAULT_TEMP_DIR" ]]; then
   echo "Creating Vault Temp Dir"
-  sudo mkdir -p "$MOUNT_POINT_A/myown_storage_vault_temp"
-  sudo chmod 777 "$MOUNT_POINT_A/myown_storage_vault_temp"
+  sudo mkdir -p "$MOUNT_POINT_A_VAULT_TEMP_DIR"
+  sudo chmod 755 "$MOUNT_POINT_A_VAULT_TEMP_DIR"
 fi
+
+# Create Vault Users Dir if it Does Not Exist
+if [[ ! -d "$VAULT_USERS_DIR" ]]; then
+  echo "Creating Vault Users Dir"
+  sudo mkdir -p "$VAULT_USERS_DIR"
+  sudo chmod 755 "$VAULT_USERS_DIR"
+fi
+
 
 # Install cron job for regular Vault backups
 # Prevent duplicate cron entries by ensuring the script checks for an existing entry
@@ -181,7 +194,7 @@ LOG_FILE="$LOG_FILE"  # Log file for backup logs
 
 
 # Run rsync backup
-echo "Starting backup from \$MOUNT_POINT_A/myown_storage_vault to \$MOUNT_POINT_B/myown_storage_vault_backup at \$(date)" >> "\$LOG_FILE"
+echo "Starting backup from \$MOUNT_POINT_A_VAULT_DIR to \$MOUNT_POINT_B_VAULT_BACKUP_DIR at \$(date)" >> "\$LOG_FILE"
 
 if ! mountpoint -q "$MOUNT_POINT_A"; then
     echo "Error: $MOUNT_POINT_A is not mounted. Aborting!" >> "\$LOG_FILE"
@@ -195,21 +208,21 @@ fi
 
 
 # Create Temp Dir if it Does Not Exist
-if [[ ! -d "\$MOUNT_POINT_B/myown_storage_vault_backup_temp" ]]; then
+if [[ ! -d "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
   echo "Creating Temp Dir"
-  sudo mkdir -p "\$MOUNT_POINT_B/myown_storage_vault_backup_temp"
-  sudo chmod 777 "\$MOUNT_POINT_B/myown_storage_vault_backup_temp"
+  sudo mkdir -p "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
+  sudo chmod 755 "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
 fi
 # Create Backup Dir if it Does Not Exist
-if [[ ! -d "\$MOUNT_POINT_B/myown_storage_vault_backup" ]]; then
+if [[ ! -d "\$MOUNT_POINT_B_VAULT_BACKUP_DIR" ]]; then
   echo "Creating Backup Dir"
-  sudo mkdir -p "\$MOUNT_POINT_B/myown_storage_vault_backup"
-  sudo chmod 777 "\$MOUNT_POINT_B/myown_storage_vault_backup"
+  sudo mkdir -p "\$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+  sudo chmod 755 "\$MOUNT_POINT_B_VAULT_BACKUP_DIR"
 fi
 # use flock in combination with rsync to prevent other processes to 
 # interfere with the source while sync is in progress
 # also wait only 600s (10 min) then exit
-sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B/myown_storage_vault_backup_temp" "\$MOUNT_POINT_A/myown_storage_vault" "\$MOUNT_POINT_B/myown_storage_vault_backup" >> "\$LOG_FILE" 2>&1
+sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "\$MOUNT_POINT_A_VAULT_DIR" "\$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "\$LOG_FILE" 2>&1
 
 if [ \$? -ne 0 ]; then
   echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "\$LOG_FILE"
