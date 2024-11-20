@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# The disks need to be formatted as exfat to work properly
+
 # ensure it's running as sudo
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root or use sudo."
@@ -7,8 +9,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Configuration Section
-UUID_A="273c3d88-09e8-477b-a2ba-c160340bbcdb"  # UUID of USB Drive A (Storage)
-UUID_B="f78d83e6-e275-4a15-bd36-ff69e2050de5"  # UUID of USB Drive B (Backup)
+UUID_A="77FD-D1ED"  # UUID of USB Drive A (Storage)
+UUID_B="7FFF-F54B"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 MOUNT_POINT_B="/mnt/myown_storage_B"  # Mount point for USB Drive B (e.g., /mnt/usbB)
 MOUNT_POINT_A_VAULT_DIR="$MOUNT_POINT_A/myown_storage_vault"  
@@ -67,12 +69,14 @@ DEVICE_B_TYPE=$(blkid -s TYPE -o value /dev/disk/by-uuid/"$UUID_B" 2>/dev/null)
 
 if ! grep -qs "$UUID_A" /etc/fstab; then
   echo "Adding Drive A to /etc/fstab"
-  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,nofail 0 2" | sudo tee -a /etc/fstab
+  # noatime used to protect the disk of uneccessary write (no access time written to files on read)
+  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,umask=000,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 if ! grep -qs "$UUID_B" /etc/fstab; then
   echo "Adding Drive B to /etc/fstab"
-  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,nofail 0 2" | sudo tee -a /etc/fstab
+  # noatime used to protect the disk of uneccessary write (no access time written to files on read)
+  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,umask=000,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 echo "Running systemctl daemon-reload..."
@@ -124,7 +128,7 @@ fi
 # Now mount the drive at the desired mount point
 if ! mountpoint -q "$MOUNT_POINT_A"; then
     echo "Mounting $DEVICE_A to $MOUNT_POINT_A"
-    sudo mount "$DEVICE_A" "$MOUNT_POINT_A"
+    sudo mount -o umask=000 "$DEVICE_A" "$MOUNT_POINT_A"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to mount $DEVICE_A to $MOUNT_POINT_A"
         exit 1
@@ -135,7 +139,7 @@ else
 fi
 if ! mountpoint -q "$MOUNT_POINT_B"; then
     echo "Mounting $DEVICE_B to $MOUNT_POINT_B"
-    sudo mount "$DEVICE_B" "$MOUNT_POINT_B"
+    sudo mount -o umask=000 "$DEVICE_B" "$MOUNT_POINT_B"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to mount $DEVICE_B to $MOUNT_POINT_B"
         exit 1
@@ -187,49 +191,43 @@ echo "Writing backup script to $BACKUP_SCRIPT"
 sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
 #!/bin/bash
 
-# Configuration Section
-MOUNT_POINT_A="$MOUNT_POINT_A"  # Mount point for USB Drive A
-MOUNT_POINT_B="$MOUNT_POINT_B"  # Mount point for USB Drive B
-LOG_FILE="$LOG_FILE"  # Log file for backup logs
-
 
 # Run rsync backup
-echo "Starting backup from \$MOUNT_POINT_A_VAULT_DIR to \$MOUNT_POINT_B_VAULT_BACKUP_DIR at \$(date)" >> "\$LOG_FILE"
+echo "Starting backup from $MOUNT_POINT_A_VAULT_DIR to $MOUNT_POINT_B_VAULT_BACKUP_DIR at \$(date)" >> "$LOG_FILE"
 
 if ! mountpoint -q "$MOUNT_POINT_A"; then
-    echo "Error: $MOUNT_POINT_A is not mounted. Aborting!" >> "\$LOG_FILE"
+    echo "Error: $MOUNT_POINT_A is not mounted. Aborting!" >> "$LOG_FILE"
     exit 1
 fi
 
 if ! mountpoint -q "$MOUNT_POINT_B"; then
-    echo "Error: $MOUNT_POINT_B is not mounted. Aborting!" >> "\$LOG_FILE"
+    echo "Error: $MOUNT_POINT_B is not mounted. Aborting!" >> "$LOG_FILE"
     exit 1
 fi
 
 
 # Create Temp Dir if it Does Not Exist
-if [[ ! -d "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
+if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
   echo "Creating Temp Dir"
-  sudo mkdir -p "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
-  sudo chmod 755 "\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
+  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
+  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
 fi
 # Create Backup Dir if it Does Not Exist
-if [[ ! -d "\$MOUNT_POINT_B_VAULT_BACKUP_DIR" ]]; then
+if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_DIR" ]]; then
   echo "Creating Backup Dir"
-  sudo mkdir -p "\$MOUNT_POINT_B_VAULT_BACKUP_DIR"
-  sudo chmod 755 "\$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
 fi
 # use flock in combination with rsync to prevent other processes to 
 # interfere with the source while sync is in progress
 # also wait only 600s (10 min) then exit
-sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync -av --delete --temp-dir="\$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "\$MOUNT_POINT_A_VAULT_DIR" "\$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "\$LOG_FILE" 2>&1
+sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync --verbose --times --atimes --open-noatime --recursive --delete --temp-dir="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "$MOUNT_POINT_A_VAULT_DIR" "$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "$LOG_FILE" 2>&1
 
 if [ \$? -ne 0 ]; then
-  echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "\$LOG_FILE"
+  echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "$LOG_FILE"
 else
-  echo "Vault Backup completed successfully at \$(date)" >> "\$LOG_FILE"
-
-
+  echo "Vault Backup completed successfully at \$(date)" >> "$LOG_FILE"
+fi
 EOL
 
 # Make the backup script executable
