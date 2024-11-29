@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# The disks need to be formatted as exfat to work properly
+# The disks need to be formatted as ext4 to work properly
 
 # ensure it's running as sudo
 if [ "$EUID" -ne 0 ]; then
@@ -9,8 +9,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Configuration Section
-UUID_A="77FD-D1ED"  # UUID of USB Drive A (Storage)
-UUID_B="7FFF-F54B"  # UUID of USB Drive B (Backup)
+UUID_A="7669a2e8-88dc-4a2f-9900-9644226ac573"  # UUID of USB Drive A (Storage)
+UUID_B="2f9886c6-c954-4745-9c65-354e6e42a65c"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 MOUNT_POINT_B="/mnt/myown_storage_B"  # Mount point for USB Drive B (e.g., /mnt/usbB)
 MOUNT_POINT_A_VAULT_DIR="$MOUNT_POINT_A/myown_storage_vault"  
@@ -67,16 +67,17 @@ fi
 DEVICE_A_TYPE=$(blkid -s TYPE -o value /dev/disk/by-uuid/"$UUID_A" 2>/dev/null)
 DEVICE_B_TYPE=$(blkid -s TYPE -o value /dev/disk/by-uuid/"$UUID_B" 2>/dev/null)
 
+
 if ! grep -qs "$UUID_A" /etc/fstab; then
   echo "Adding Drive A to /etc/fstab"
   # noatime used to protect the disk of uneccessary write (no access time written to files on read)
-  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,umask=000,nofail 0 2" | sudo tee -a /etc/fstab
+  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,noatime,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 if ! grep -qs "$UUID_B" /etc/fstab; then
   echo "Adding Drive B to /etc/fstab"
   # noatime used to protect the disk of uneccessary write (no access time written to files on read)
-  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,umask=000,nofail 0 2" | sudo tee -a /etc/fstab
+  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,noatime,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 echo "Running systemctl daemon-reload..."
@@ -128,7 +129,7 @@ fi
 # Now mount the drive at the desired mount point
 if ! mountpoint -q "$MOUNT_POINT_A"; then
     echo "Mounting $DEVICE_A to $MOUNT_POINT_A"
-    sudo mount -o umask=000 "$DEVICE_A" "$MOUNT_POINT_A"
+    sudo mount -o noatime "$DEVICE_A" "$MOUNT_POINT_A"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to mount $DEVICE_A to $MOUNT_POINT_A"
         exit 1
@@ -139,7 +140,7 @@ else
 fi
 if ! mountpoint -q "$MOUNT_POINT_B"; then
     echo "Mounting $DEVICE_B to $MOUNT_POINT_B"
-    sudo mount -o umask=000 "$DEVICE_B" "$MOUNT_POINT_B"
+    sudo mount -o noatime "$DEVICE_B" "$MOUNT_POINT_B"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to mount $DEVICE_B to $MOUNT_POINT_B"
         exit 1

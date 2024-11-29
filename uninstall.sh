@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configuration - should match the original script's configuration
-UUID_A="273c3d88-09e8-477b-a2ba-c160340bbcdb"  # UUID of USB Drive A (Storage)
-UUID_B="f78d83e6-e275-4a15-bd36-ff69e2050de5"  # UUID of USB Drive B (Backup)
+UUID_A="7669a2e8-88dc-4a2f-9900-9644226ac573"  # UUID of USB Drive A (Storage)
+UUID_B="2f9886c6-c954-4745-9c65-354e6e42a65c"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"
 MOUNT_POINT_B="/mnt/myown_storage_B"
 LOG_FILE="/var/log/myown_storage_backup.log"
