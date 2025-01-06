@@ -89,21 +89,21 @@ sudo chmod 700 ./directories
 
 #### use ACL to set the right permissions to directories for specific users or groups of users
 
-setfacl -R -m u:myuser:rwx /myuserdir  
+sudo setfacl -R -m u:myuser:rwx ./myuserdir  
 
-setfacl -R -d -m u:myuser:rwx /myuserdir  
-
-
-setfacl -R -m g:publicrwx:rwx /publicshared
-
-setfacl -R -d -m g:publicrwx:rwx /publicshared   
+sudo setfacl -R -d -m u:myuser:rwx ./myuserdir  
 
 
-setfacl -m o::---  /mydir # restrict other
+sudo setfacl -R -m g:publicrwx:rwx ./publicshared
 
-setfacl -m -d o::---  /mydir # restrict other
+sudo setfacl -R -d -m g:publicrwx:rwx ./publicshared   
 
-setfacl -m m::rwx /mydir # modify the mask to rwx since this might be initialized to --- and interfering with group permissions
+
+sudo setfacl -m o::---  ./mydir # restrict other
+
+sudo setfacl -m -d o::---  ./mydir # restrict other
+
+sudo setfacl -m m::rwx ./mydir # modify the mask to rwx since this might be initialized to --- and interfering with group permissions
 
 
 ------------------------------------------
