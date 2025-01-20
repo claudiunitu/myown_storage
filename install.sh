@@ -222,7 +222,7 @@ fi
 # use flock in combination with rsync to prevent other processes to 
 # interfere with the source while sync is in progress
 # also wait only 600s (10 min) then exit
-sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync --verbose --times --atimes --open-noatime --recursive --delete --temp-dir="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "$MOUNT_POINT_A_VAULT_DIR" "$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "$LOG_FILE" 2>&1
+sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync --verbose --times --atimes --open-noatime --recursive --perms --acls --delete --temp-dir="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "$MOUNT_POINT_A_VAULT_DIR" "$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "$LOG_FILE" 2>&1
 
 if [ \$? -ne 0 ]; then
   echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "$LOG_FILE"
