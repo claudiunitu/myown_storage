@@ -10,7 +10,7 @@ fi
 
 # Configuration Section
 UUID_A="7669a2e8-88dc-4a2f-9900-9644226ac573"  # UUID of USB Drive A (Storage)
-UUID_B="2f9886c6-c954-4745-9c65-354e6e42a65c"  # UUID of USB Drive B (Backup)
+UUID_B="5c7023ed-0418-478d-b3fc-870752f059d7"  # UUID of USB Drive B (Backup)
 MOUNT_POINT_A="/mnt/myown_storage_A"  # Mount point for USB Drive A (e.g., /mnt/usbA)
 MOUNT_POINT_B="/mnt/myown_storage_B"  # Mount point for USB Drive B (e.g., /mnt/usbB)
 MOUNT_POINT_A_VAULT_DIR="$MOUNT_POINT_A/myown_storage_vault"  
@@ -181,6 +181,20 @@ if [[ ! -d "$VAULT_USERS_DIR" ]]; then
   sudo chmod 755 "$VAULT_USERS_DIR"
 fi
 
+  
+# Create Vault Backup Dir if it Does Not Exist
+if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_DIR" ]]; then
+  echo "Creating Vault Backup Dir"
+  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+fi
+
+# Create Vault Backup Temp Dir if it Does Not Exist
+if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
+  echo "Creating Vault Backup temp Dir"
+  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
+  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
+fi
 
 # Install cron job for regular Vault backups
 # Prevent duplicate cron entries by ensuring the script checks for an existing entry
@@ -192,43 +206,90 @@ echo "Writing backup script to $BACKUP_SCRIPT"
 sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
 #!/bin/bash
 
+TIMESTAMP=\$(date +%F_%H-%M-%S)
+SOURCE_DIR="$MOUNT_POINT_A_VAULT_DIR"
 
-# Run rsync backup
-echo "Starting backup from $MOUNT_POINT_A_VAULT_DIR to $MOUNT_POINT_B_VAULT_BACKUP_DIR at \$(date)" >> "$LOG_FILE"
+BACKUP_BASE="$MOUNT_POINT_B_VAULT_BACKUP_DIR"
+TEMP_DIR="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
 
-if ! mountpoint -q "$MOUNT_POINT_A"; then
-    echo "Error: $MOUNT_POINT_A is not mounted. Aborting!" >> "$LOG_FILE"
-    exit 1
+
+BACKUP_DIR="\$BACKUP_BASE/backup-\$TIMESTAMP"
+LATEST_LINK="\$BACKUP_BASE/latest"
+LOCK_FILE_PATH="/var/lock/myown_storage_rsync.lock"
+
+LOG_PATH="\$BACKUP_BASE/myown_storage_backup.log"
+
+# Delete backups older than X days
+RETENTION_DAYS=60
+
+
+exec >> "\$LOG_PATH" 2>&1
+echo "=== Backup started at \$(date) ==="
+
+if ! sudo flock -x -w 600 "\$LOCK_FILE_PATH" true; then
+  echo "Failed to acquire lock" >> "\$LOG_PATH"
+  exit 1
 fi
 
-if ! mountpoint -q "$MOUNT_POINT_B"; then
-    echo "Error: $MOUNT_POINT_B is not mounted. Aborting!" >> "$LOG_FILE"
-    exit 1
-fi
-
-
-# Create Temp Dir if it Does Not Exist
-if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
-  echo "Creating Temp Dir"
-  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
-  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
-fi
-# Create Backup Dir if it Does Not Exist
-if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_DIR" ]]; then
-  echo "Creating Backup Dir"
-  sudo mkdir -p "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
-  sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_DIR"
-fi
-# use flock in combination with rsync to prevent other processes to 
-# interfere with the source while sync is in progress
-# also wait only 600s (10 min) then exit
-sudo flock -x -w 600 /var/lock/myown_storage_rsync.lock rsync --verbose --times --atimes --open-noatime --recursive --perms --acls --delete --temp-dir="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" "$MOUNT_POINT_A_VAULT_DIR" "$MOUNT_POINT_B_VAULT_BACKUP_DIR" >> "$LOG_FILE" 2>&1
-
-if [ \$? -ne 0 ]; then
-  echo "Vault Backup failed. Failed to acquire lock or run rsync." >> "$LOG_FILE"
+if [ -L "\$LATEST_LINK" ] && [ -d "\$LATEST_LINK" ]; then
+  LINK_DEST="--link-dest=\$LATEST_LINK"
 else
-  echo "Vault Backup completed successfully at \$(date)" >> "$LOG_FILE"
+  LINK_DEST=""
 fi
+
+sudo flock -x -w 600 \$LOCK_FILE_PATH \
+  sudo rsync --verbose --times --recursive --perms --acls \
+        --owner --group --delete --temp-dir="\$TEMP_DIR" \
+        \$LINK_DEST \
+        "\$SOURCE_DIR" "\$BACKUP_DIR" >> "\$LOG_PATH" 2>&1 && \
+  sudo ln -sfn "\$BACKUP_DIR" "\$LATEST_LINK"
+  
+# Cleanup old backups
+NOW_EPOCH=\$(date +%s)
+
+for dir in "\$BACKUP_BASE"/backup-*; do
+  # Skip if not a directory
+  if [ ! -d "\$dir" ]; then
+    continue
+  fi
+
+  basename_dir=\$(basename "\$dir")
+  # Remove 'backup-' prefix safely
+  timestamp=\$(echo "\$basename_dir" | sed 's/^backup-//')
+
+  # Replace underscore with space to separate date and time
+  date_string=\$(echo "\$timestamp" | tr '_' ' ')
+
+  # Split date and time parts
+  date_part=\$(echo "\$date_string" | cut -d' ' -f1)
+  time_part=\$(echo "\$date_string" | cut -d' ' -f2)
+
+  # Replace dashes in time part with colons for date parsing
+  time_part=\$(echo "\$time_part" | tr '-' ':')
+
+  # Recombine into a single date string
+  date_string="\$date_part \$time_part"
+
+  # Parse date to epoch seconds
+  backup_epoch=\$(date -d "\$date_string" +%s 2>/dev/null)
+
+  if [ -z "\$backup_epoch" ]; then
+    echo "Warning: cannot parse date from \$dir"
+    continue
+  fi
+
+  # Calculate age in days
+  age_days=\$(( (NOW_EPOCH - backup_epoch) / 86400 ))
+
+  # Remove backup if older than retention period
+  if [ "\$age_days" -gt "\$RETENTION_DAYS" ]; then
+    echo "Removing old backup \$dir (age \$age_days days)"
+    sudo rm -rf "\$dir"
+  fi
+done
+
+echo "=== Backup finished at \$(date) ==="
+
 EOL
 
 # Make the backup script executable
