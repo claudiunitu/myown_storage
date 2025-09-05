@@ -248,6 +248,7 @@ fi
 
 if [ -L "\$LATEST_LINK" ] && [ -d "\$LATEST_LINK" ]; then
   LINK_DEST="--link-dest=\$LATEST_LINK"
+  LINK_DEST="\$(readlink -f \$LATEST_LINK)"
 else
   LINK_DEST=""
 fi
@@ -255,7 +256,7 @@ fi
 sudo flock -x -w 600 \$LOCK_FILE_PATH \
   sudo rsync --verbose --times --recursive --perms --acls \
         --owner --group --delete --temp-dir="\$TEMP_DIR" \
-        \$LINK_DEST \
+        --link-dest="\$LINK_DEST" \
         "\$SOURCE_DIR" "\$BACKUP_DIR" >> "\$LOG_PATH" 2>&1 && \
   sudo ln -sfn "\$BACKUP_DIR" "\$LATEST_LINK"
   
