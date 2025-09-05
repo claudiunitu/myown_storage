@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # Path to your input file (label <tab> source_dir)
-INPUT_FILE="backup_list.txt"
+
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+INPUT_FILE="$SCRIPT_DIR/backup_list.txt"
 
 # Base target directory
 TARGET_BASE="/mnt/myown_storage_A/myown_storage_vault/users/synced-backups"
@@ -14,7 +16,7 @@ TEMP_DIR="/mnt/myown_storage_A/myown_storage_vault_temp"
 LOCK_FILE="/var/lock/myown_storage_rsync.lock"
 
 # Mapping file
-MAPPING_FILE="/mnt/myown_storage_A/myown_storage_vault/users/synced-backups/mapping.txt"
+MAPPING_FILE="$TARGET_BASE/mapping.txt"
 
 # Ensure mapping file exists
 sudo mkdir -p "$(dirname "$MAPPING_FILE")"

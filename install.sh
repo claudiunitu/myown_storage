@@ -19,6 +19,8 @@ MOUNT_POINT_A_VAULT_TEMP_DIR="$MOUNT_POINT_A/myown_storage_vault_temp"
 MOUNT_POINT_B_VAULT_BACKUP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup"  
 MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup_temp"  
 LOG_FILE="/var/log/myown_storage_backup.log"  # Log file for cron job logs
+BACKUP_SYNC_SCRIPT_BASE="/usr/local/bin/backup_sync"  # Path to the backup sync script
+BACKUP_SYNC_SCRIPT="$BACKUP_SYNC_SCRIPT_BASE/sync.sh"  # Path to the backup sync script
 BACKUP_SCRIPT="/usr/local/bin/myown_storage_backup.sh"  # Path to the backup script
 
 #Minute (0 - 59)
@@ -26,7 +28,7 @@ BACKUP_SCRIPT="/usr/local/bin/myown_storage_backup.sh"  # Path to the backup scr
 #Day of Month (1 - 31) */2 every 2 days
 #Month (1 - 12)
 #Day of Week (0 - 7, where 0 and 7 both represent Sunday)
-CRONJOB="0 0 */2 * * $BACKUP_SCRIPT"
+CRONJOB="0 0 */2 * * $BACKUP_SYNC_SCRIPT ; $BACKUP_SCRIPT"
 
 # Check if UUIDs and Mount Points are specified
 if [[ -z "$UUID_A" || -z "$UUID_B" || -z "$MOUNT_POINT_A" || -z "$MOUNT_POINT_B" ]]; then
@@ -198,9 +200,22 @@ fi
 
 # Install cron job for regular Vault backups
 # Prevent duplicate cron entries by ensuring the script checks for an existing entry
-(crontab -l 2>/dev/null | grep -v "$BACKUP_SCRIPT"; echo "$CRONJOB") | crontab -
+#(crontab -l 2>/dev/null | grep -v "$BACKUP_SCRIPT"; echo "$CRONJOB") | crontab -
+
+# Install cronjob safely, avoiding duplicates
+(
+    crontab -l 2>/dev/null \
+    | grep -v -F "$BACKUP_SYNC_SCRIPT" \
+    | grep -v -F "$BACKUP_SCRIPT"
+    echo "$CRONJOB"
+) | crontab -
 
 echo "Cron job installed to back up Drive A to Drive B every hour."
+
+echo "Writing backup script sync to the right location to $BACKUP_SYNC_SCRIPT_BASE"
+sudo mkdir "$BACKUP_SYNC_SCRIPT_BASE"
+sudo cp -r ./backup_sync/* "$BACKUP_SYNC_SCRIPT_BASE"
+sudo chmod +x "$BACKUP_SYNC_SCRIPT"
 
 echo "Writing backup script to $BACKUP_SCRIPT"
 sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
