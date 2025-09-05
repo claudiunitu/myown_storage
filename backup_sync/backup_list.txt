@@ -1,0 +1,3 @@
+WEBDAV_DATA	/srv/webdav
+RADICALE_CONFIG	/etc/radicale
+RADICALE_DATA	/var/lib/radicale/collections
