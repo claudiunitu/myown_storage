@@ -1,4 +1,4 @@
 WEBDAV_DATA	/srv/webdav
 RADICALE_CONFIG	/etc/radicale
 RADICALE_DATA	/var/lib/radicale/collections
-CALIBRE_DATA	/home/raspberrypi/Calibre Library
+CALIBRE_DATA	/srv/calibre

@@ -22,47 +22,47 @@ MAPPING_FILE="$TARGET_BASE/mapping.txt"
 sudo mkdir -p "$(dirname "$MAPPING_FILE")"
 sudo touch "$MAPPING_FILE"
 
-while IFS=$'\t' read -r CURRENT_ITERATIONS_LABEL CURRENT_ITERATION_DIR; do
-    # Skip empty lines or comments
-    [[ -z "$CURRENT_ITERATIONS_LABEL" || "$CURRENT_ITERATION_DIR" =~ ^# ]] && continue
+(
+  flock -x -w 3600 200 || { echo "Failed to acquire lock"; exit 1; }
 
-    # Check if source directory exists
-    if [[ ! -d "$CURRENT_ITERATION_DIR" ]]; then
-        echo "!!! WARNING: Source directory '$CURRENT_ITERATION_DIR' does not exist. Skipping."
-        continue
-    fi
+    while IFS=$'\t' read -r CURRENT_ITERATIONS_LABEL CURRENT_ITERATION_DIR; do
+	
+	CURRENT_ITERATION_DIR=$(echo "$CURRENT_ITERATION_DIR" | tr -d '\r' | xargs)
+	# Skip empty lines or comments
+	[[ -z "$CURRENT_ITERATIONS_LABEL" || "$CURRENT_ITERATION_DIR" =~ ^# ]] && continue
 
-    # Turn full path into safe directory name by replacing "/" with "_"
-    SAFE_NAME=$(echo "$CURRENT_ITERATION_DIR" | sed 's#/#_#g; s#^_##')
-    DEST_DIR="$TARGET_BASE/$CURRENT_ITERATIONS_LABEL/$SAFE_NAME"
+	# Check if source directory exists
+	if [[ ! -d "$CURRENT_ITERATION_DIR" ]]; then
+	    echo "!!! WARNING: Source directory '$CURRENT_ITERATION_DIR' does not exist. Skipping."
+	    continue
+	fi
 
-    # Ensure destination directory exists
-    sudo mkdir -p "$DEST_DIR"
+	# Turn full path into safe directory name by replacing "/" with "_"
+	SAFE_NAME=$(echo "$CURRENT_ITERATION_DIR" | sed 's#/#_#g; s#^_##')
+	DEST_DIR="$TARGET_BASE/$CURRENT_ITERATIONS_LABEL/$SAFE_NAME"
 
-    echo ">>> Syncing '$CURRENT_ITERATION_DIR' into '$DEST_DIR'..."
+	# Ensure destination directory exists
+	sudo mkdir -p "$DEST_DIR"
 
-    sudo bash -c "
-		flock -x -w 600 '$LOCK_FILE' rsync \
-			--verbose \
-			--times \
-			--atimes \
-			--open-noatime \
-			--recursive \
-			--delete \
-			--temp-dir='$TEMP_DIR' \
-			'$CURRENT_ITERATION_DIR'/ \
-			'$DEST_DIR/'
-		"
+	echo ">>> Syncing '$CURRENT_ITERATION_DIR' into '$DEST_DIR'..."
 
-    # Prepare mapping line
-    MAPPING_LINE="$CURRENT_ITERATIONS_LABEL"$'\t'"$CURRENT_ITERATION_DIR"$'\t'"$DEST_DIR"
+	rsync \
+	    -aHAX \
+	    --delete \
+	    --temp-dir="$TEMP_DIR" \
+	    "$CURRENT_ITERATION_DIR/" \
+	    "$DEST_DIR"
 
-    # Append mapping only if it doesn't already exist
-    if ! grep -Fqx "$MAPPING_LINE" "$MAPPING_FILE"; then
-        sudo bash -c "echo -e '$MAPPING_LINE' >> '$MAPPING_FILE'"
-    fi
+	# Prepare mapping line
+	MAPPING_LINE="$CURRENT_ITERATIONS_LABEL"$'\t'"$CURRENT_ITERATION_DIR"$'\t'"$DEST_DIR"
 
-done < "$INPUT_FILE"
+	# Append mapping only if it doesn't already exist
+	if ! grep -Fqx "$MAPPING_LINE" "$MAPPING_FILE"; then
+	    sudo bash -c "echo -e '$MAPPING_LINE' >> '$MAPPING_FILE'"
+	fi
+
+    done < "$INPUT_FILE"
+) 200>"$LOCK_FILE"
 
 # Sort the mapping file by the first column (label) and remove duplicates
 sudo sort -t$'\t' -k1,1 -u "$MAPPING_FILE" -o "$MAPPING_FILE"

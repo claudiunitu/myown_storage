@@ -19,9 +19,15 @@ MOUNT_POINT_A_VAULT_TEMP_DIR="$MOUNT_POINT_A/myown_storage_vault_temp"
 MOUNT_POINT_B_VAULT_BACKUP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup"  
 MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR="$MOUNT_POINT_B/myown_storage_vault_backup_temp"  
 LOG_FILE="/var/log/myown_storage_backup.log"  # Log file for cron job logs
-BACKUP_SYNC_SCRIPT_BASE="/usr/local/bin/backup_sync"  # Path to the backup sync script
+BACKUP_SCRIPT_FILENAME="incremental-vault-backup.sh"
+BACKUP_SCRIPT_ORIGINAL_PATH="./$BACKUP_SCRIPT_FILENAME"
+BACKUP_SCRIPT_BASE="/usr/local/bin"
+BACKUP_SCRIPT="$BACKUP_SCRIPT_BASE/$BACKUP_SCRIPT_FILENAME"  # Path to the incremental backup script
+BACKUP_SYNC_SCRIPT_BASE="$BACKUP_SCRIPT_BASE/backup_sync"  # Path to the backup sync script
 BACKUP_SYNC_SCRIPT="$BACKUP_SYNC_SCRIPT_BASE/sync.sh"  # Path to the backup sync script
-BACKUP_SCRIPT="/usr/local/bin/myown_storage_backup.sh"  # Path to the backup script
+
+SERVICE_NAME="myown-backup"
+
 
 #Minute (0 - 59)
 #Hour (0 - 23)
@@ -198,118 +204,60 @@ if [[ ! -d "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR" ]]; then
   sudo chmod 755 "$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
 fi
 
-# Install cron job for regular Vault backups
-# Prevent duplicate cron entries by ensuring the script checks for an existing entry
-#(crontab -l 2>/dev/null | grep -v "$BACKUP_SCRIPT"; echo "$CRONJOB") | crontab -
+# Install scripts
 
-# Install cronjob safely, avoiding duplicates
-(
-    crontab -l 2>/dev/null \
-    | grep -v -F "$BACKUP_SYNC_SCRIPT" \
-    | grep -v -F "$BACKUP_SCRIPT"
-    echo "$CRONJOB"
-) | crontab -
-
-echo "Cron job installed to back up Drive A to Drive B every hour."
-
-echo "Writing backup script sync to the right location to $BACKUP_SYNC_SCRIPT_BASE"
+echo "Copying backup script sync to the right location to $BACKUP_SYNC_SCRIPT_BASE"
 sudo mkdir "$BACKUP_SYNC_SCRIPT_BASE"
 sudo cp -r ./backup_sync/* "$BACKUP_SYNC_SCRIPT_BASE"
 sudo chmod +x "$BACKUP_SYNC_SCRIPT"
 
-echo "Writing backup script to $BACKUP_SCRIPT"
-sudo tee "$BACKUP_SCRIPT" > /dev/null <<EOL
-#!/bin/bash
-
-TIMESTAMP=\$(date +%F_%H-%M-%S)
-SOURCE_DIR="$MOUNT_POINT_A_VAULT_DIR"
-
-BACKUP_BASE="$MOUNT_POINT_B_VAULT_BACKUP_DIR"
-TEMP_DIR="$MOUNT_POINT_B_VAULT_BACKUP_TEMP_DIR"
-
-
-BACKUP_DIR="\$BACKUP_BASE/backup-\$TIMESTAMP"
-LATEST_LINK="\$BACKUP_BASE/latest"
-LOCK_FILE_PATH="/var/lock/myown_storage_rsync.lock"
-
-LOG_PATH="\$BACKUP_BASE/myown_storage_backup.log"
-
-# Delete backups older than X days
-RETENTION_DAYS=60
-
-
-exec >> "\$LOG_PATH" 2>&1
-echo "=== Backup started at \$(date) ==="
-
-if ! sudo flock -x -w 600 "\$LOCK_FILE_PATH" true; then
-  echo "Failed to acquire lock" >> "\$LOG_PATH"
-  exit 1
-fi
-
-if [ -L "\$LATEST_LINK" ] && [ -d "\$LATEST_LINK" ]; then
-  LINK_DEST="--link-dest=\$LATEST_LINK"
-  LINK_DEST="\$(readlink -f \$LATEST_LINK)"
-else
-  LINK_DEST=""
-fi
-
-sudo flock -x -w 600 \$LOCK_FILE_PATH \
-  sudo rsync --verbose --times --recursive --perms --acls \
-        --owner --group --delete --temp-dir="\$TEMP_DIR" \
-        --link-dest="\$LINK_DEST" \
-        "\$SOURCE_DIR" "\$BACKUP_DIR" >> "\$LOG_PATH" 2>&1 && \
-  sudo ln -sfn "\$BACKUP_DIR" "\$LATEST_LINK"
-  
-# Cleanup old backups
-NOW_EPOCH=\$(date +%s)
-
-for dir in "\$BACKUP_BASE"/backup-*; do
-  # Skip if not a directory
-  if [ ! -d "\$dir" ]; then
-    continue
-  fi
-
-  basename_dir=\$(basename "\$dir")
-  # Remove 'backup-' prefix safely
-  timestamp=\$(echo "\$basename_dir" | sed 's/^backup-//')
-
-  # Replace underscore with space to separate date and time
-  date_string=\$(echo "\$timestamp" | tr '_' ' ')
-
-  # Split date and time parts
-  date_part=\$(echo "\$date_string" | cut -d' ' -f1)
-  time_part=\$(echo "\$date_string" | cut -d' ' -f2)
-
-  # Replace dashes in time part with colons for date parsing
-  time_part=\$(echo "\$time_part" | tr '-' ':')
-
-  # Recombine into a single date string
-  date_string="\$date_part \$time_part"
-
-  # Parse date to epoch seconds
-  backup_epoch=\$(date -d "\$date_string" +%s 2>/dev/null)
-
-  if [ -z "\$backup_epoch" ]; then
-    echo "Warning: cannot parse date from \$dir"
-    continue
-  fi
-
-  # Calculate age in days
-  age_days=\$(( (NOW_EPOCH - backup_epoch) / 86400 ))
-
-  # Remove backup if older than retention period
-  if [ "\$age_days" -gt "\$RETENTION_DAYS" ]; then
-    echo "Removing old backup \$dir (age \$age_days days)"
-    sudo rm -rf "\$dir"
-  fi
-done
-
-echo "=== Backup finished at \$(date) ==="
-
-EOL
-
-# Make the backup script executable
+echo "Copying incremental backup script to the right location to $BACKUP_SCRIPT_BASE"
+sudo mkdir "$BACKUP_SCRIPT_BASE"
+sudo cp -r "$BACKUP_SCRIPT_ORIGINAL_PATH" "$BACKUP_SCRIPT_BASE"
 sudo chmod +x "$BACKUP_SCRIPT"
+
+# Create service unit
+
+
+cat >/etc/systemd/system/${SERVICE_NAME}.service <<EOF
+[Unit]
+Description=MyOwn Storage Backup
+After=local-fs.target
+Requires=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=$BACKUP_SYNC_SCRIPT
+ExecStartPost=$BACKUP_SCRIPT
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+EOF
+
+# Create timer unit
+cat >/etc/systemd/system/${SERVICE_NAME}.timer <<EOF
+[Unit]
+Description=Run MyOwn Storage Backup Daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Reload, enable, start timer
+echo "Reloading systemd units..."
+systemctl daemon-reload
+systemctl enable --now ${SERVICE_NAME}.timer
+
+echo "Done. Check status with: systemctl list-timers | grep $SERVICE_NAME"
 
 echo "Backup script created and installed at $BACKUP_SCRIPT."
 
