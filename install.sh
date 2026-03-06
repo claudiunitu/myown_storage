@@ -234,7 +234,7 @@ IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 PrivateTmp=yes
 ProtectSystem=full
-ProtectHome=yes
+ProtectHome=no
 NoNewPrivileges=yes
 EOF
 
