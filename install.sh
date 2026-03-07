@@ -79,13 +79,13 @@ DEVICE_B_TYPE=$(blkid -s TYPE -o value /dev/disk/by-uuid/"$UUID_B" 2>/dev/null)
 if ! grep -qs "$UUID_A" /etc/fstab; then
   echo "Adding Drive A to /etc/fstab"
   # noatime used to protect the disk of uneccessary write (no access time written to files on read)
-  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,noatime,nofail 0 2" | sudo tee -a /etc/fstab
+  echo "UUID=$UUID_A $MOUNT_POINT_A $DEVICE_A_TYPE defaults,noatime,nodiratime,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 if ! grep -qs "$UUID_B" /etc/fstab; then
   echo "Adding Drive B to /etc/fstab"
   # noatime used to protect the disk of uneccessary write (no access time written to files on read)
-  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,noatime,nofail 0 2" | sudo tee -a /etc/fstab
+  echo "UUID=$UUID_B $MOUNT_POINT_B $DEVICE_B_TYPE defaults,noatime,nodiratime,nofail 0 2" | sudo tee -a /etc/fstab
 fi
 
 echo "Running systemctl daemon-reload..."
